@@ -11,7 +11,8 @@ public class NPCAI : MonoBehaviour
         Investigating
     }
 
-    public State currentState = State.Idle;
+    [Header("Current State")]
+    public State currentState = State.Wandering;
 
     [Header("Detection")]
     public float detectionRange = 5f;
@@ -29,6 +30,13 @@ public class NPCAI : MonoBehaviour
     {
         agent = GetComponent<NavMeshAgent>();
 
+        if (agent == null)
+        {
+            Debug.LogError("NPCAI requires a NavMeshAgent on " + gameObject.name);
+            enabled = false;
+            return;
+        }
+
         GameObject playerObject =
             GameObject.FindGameObjectWithTag("Player");
 
@@ -36,17 +44,28 @@ public class NPCAI : MonoBehaviour
         {
             player = playerObject.transform;
         }
+        else
+        {
+            Debug.LogWarning(
+                "NPCAI could not find a GameObject tagged 'Player'. " +
+                "Dave will still wander, but cannot detect the player."
+            );
+        }
 
         wanderTimer = 1f;
     }
 
     private void Update()
     {
-        if (player == null)
-            return;
+        float distance = Mathf.Infinity;
 
-        float distance =
-            Vector3.Distance(transform.position, player.position);
+        if (player != null)
+        {
+            distance = Vector3.Distance(
+                transform.position,
+                player.position
+            );
+        }
 
         switch (currentState)
         {
@@ -78,7 +97,7 @@ public class NPCAI : MonoBehaviour
 
         wanderTimer -= Time.deltaTime;
 
-        if (wanderTimer <= 0)
+        if (wanderTimer <= 0f)
         {
             currentState = State.Wandering;
         }
@@ -89,10 +108,13 @@ public class NPCAI : MonoBehaviour
         if (distance <= detectionRange)
         {
             currentState = State.Suspicious;
+            agent.isStopped = true;
             return;
         }
 
-        if (!agent.hasPath || agent.remainingDistance < 0.5f)
+        agent.isStopped = false;
+
+        if (!agent.hasPath || agent.remainingDistance <= 0.5f)
         {
             Wander();
         }
@@ -102,20 +124,35 @@ public class NPCAI : MonoBehaviour
     {
         agent.isStopped = true;
 
-        LookAtPlayer();
+        if (player != null)
+        {
+            LookAtPlayer();
 
-        if (distance > detectionRange + 2f)
+            if (distance > detectionRange + 2f)
+            {
+                currentState = State.Wandering;
+                wanderTimer = 0f;
+            }
+            else if (distance <= detectionRange / 2f)
+            {
+                currentState = State.Investigating;
+            }
+        }
+        else
         {
             currentState = State.Wandering;
-        }
-        else if (distance <= detectionRange / 2f)
-        {
-            currentState = State.Investigating;
+            wanderTimer = 0f;
         }
     }
 
     private void HandleInvestigating(float distance)
     {
+        if (player == null)
+        {
+            currentState = State.Wandering;
+            return;
+        }
+
         agent.isStopped = false;
 
         agent.SetDestination(player.position);
@@ -123,6 +160,7 @@ public class NPCAI : MonoBehaviour
         if (distance > detectionRange)
         {
             currentState = State.Wandering;
+            wanderTimer = 0f;
         }
     }
 
@@ -142,6 +180,19 @@ public class NPCAI : MonoBehaviour
             NavMesh.AllAreas))
         {
             agent.SetDestination(hit.position);
+
+            Debug.Log(
+                gameObject.name +
+                " wandering to " +
+                hit.position
+            );
+        }
+        else
+        {
+            Debug.LogWarning(
+                gameObject.name +
+                " could not find a position on the NavMesh."
+            );
         }
 
         wanderTimer = wanderInterval;
@@ -149,10 +200,13 @@ public class NPCAI : MonoBehaviour
 
     private void LookAtPlayer()
     {
+        if (player == null)
+            return;
+
         Vector3 direction =
             player.position - transform.position;
 
-        direction.y = 0;
+        direction.y = 0f;
 
         if (direction != Vector3.zero)
         {
