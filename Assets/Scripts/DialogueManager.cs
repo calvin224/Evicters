@@ -11,6 +11,10 @@ public class DialogueManager : MonoBehaviour
     private string[] lines;
     private int currentLine;
 
+    // Prevents the E press that opens dialogue
+    // from also advancing it.
+    private bool justOpened;
+
     private void Start()
     {
         dialoguePanel.SetActive(false);
@@ -25,6 +29,8 @@ public class DialogueManager : MonoBehaviour
         dialogueText.text = lines[currentLine];
 
         dialoguePanel.SetActive(true);
+
+        justOpened = true;
     }
 
     public bool IsOpen()
@@ -48,12 +54,20 @@ public class DialogueManager : MonoBehaviour
     private void EndDialogue()
     {
         dialoguePanel.SetActive(false);
+        justOpened = false;
     }
 
     private void Update()
     {
         if (!dialoguePanel.activeSelf)
             return;
+
+        // Ignore the same E press that opened the dialogue.
+        if (justOpened)
+        {
+            justOpened = false;
+            return;
+        }
 
         if (Keyboard.current != null &&
             Keyboard.current.eKey.wasPressedThisFrame)
