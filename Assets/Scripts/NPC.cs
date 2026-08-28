@@ -2,17 +2,18 @@ using UnityEngine;
 
 public class NPC : Interactable
 {
-    public string npcName = "Dave";
+    public OccupantData occupantData;
 
     public DialogueManager dialogueManager;
     public NPCAI npcAI;
+
+    [Header("Door")]
+    public Door door;
 
     private bool hasRefused;
 
     public override void Interact()
     {
-        // If Dave has already refused to leave,
-        // interacting with him again evicts him.
         if (hasRefused)
         {
             Evict();
@@ -22,8 +23,41 @@ public class NPC : Interactable
         StartConversation();
     }
 
-    public void RespondToKnock()
+    public void RespondToKnock(Transform doorPoint)
     {
+        Debug.Log(
+            occupantData.occupantName +
+            " received the knock."
+        );
+
+        if (npcAI == null)
+        {
+            Debug.LogError(
+                "NPCAI is not assigned to " +
+                gameObject.name
+            );
+
+            return;
+        }
+
+        npcAI.GoToDoor(
+            doorPoint,
+            ArrivedAtDoor
+        );
+    }
+
+    private void ArrivedAtDoor()
+    {
+        Debug.Log(
+            occupantData.occupantName +
+            " arrived at the door."
+        );
+
+        if (door != null)
+        {
+            door.OpenDoor();
+        }
+
         StartConversation();
     }
 
@@ -39,16 +73,9 @@ public class NPC : Interactable
             return;
         }
 
-        string[] lines =
-        {
-            "Who is it?",
-            "What do you want?",
-            "I'm not leaving this house."
-        };
-
         dialogueManager.StartDialogue(
-            npcName,
-            lines,
+            occupantData.occupantName,
+            occupantData.knockDialogue,
             OnDialogueFinished
         );
     }
@@ -58,9 +85,19 @@ public class NPC : Interactable
         hasRefused = true;
 
         Debug.Log(
-            npcName +
+            occupantData.occupantName +
             " has refused to leave."
         );
+
+        if (door != null)
+        {
+            door.CloseDoor();
+        }
+
+        if (npcAI != null)
+        {
+            npcAI.LeaveDoor();
+        }
     }
 
     public void ReactToPush()
@@ -72,15 +109,9 @@ public class NPC : Interactable
             npcAI.currentState == NPCAI.State.Evicted)
             return;
 
-        string[] lines =
-        {
-            "Hey!",
-            "Don't push me!"
-        };
-
         dialogueManager.StartDialogue(
-            npcName,
-            lines
+            occupantData.occupantName,
+            occupantData.pushDialogue
         );
 
         if (npcAI != null)
@@ -103,7 +134,7 @@ public class NPC : Interactable
 
         Debug.Log(
             "Evicting " +
-            npcName
+            occupantData.occupantName
         );
 
         npcAI.Evict();

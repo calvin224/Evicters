@@ -3,21 +3,26 @@ using UnityEngine.AI;
 
 public class NPCAI : MonoBehaviour
 {
-    public enum State { Idle, Wandering, Suspicious, Investigating, Angry, Evicted }
+    public enum State
+    {
+        Idle,
+        Wandering,
+        Suspicious,
+        Investigating,
+        Angry,
+        WalkingToDoor,
+        AtDoor,
+        Evicted
+    }
 
-    private GameManager gameManager;
+    private Transform doorPoint;
+    private System.Action doorArrivalAction;
 
-    private bool evictionComplete;
+    [Header("Occupant")]
+    public OccupantData occupantData;
 
     [Header("Current State")]
     public State currentState = State.Wandering;
-
-    [Header("Detection")]
-    public float detectionRange = 5f;
-
-    [Header("Wandering")]
-    public float wanderRadius = 5f;
-    public float wanderInterval = 4f;
 
     [Header("Eviction")]
     public Transform exitPoint;
@@ -27,29 +32,26 @@ public class NPCAI : MonoBehaviour
     public float pushForce = 5f;
     public float physicsRecoveryTime = 0.5f;
 
-    [Header("Anger")]
-    public float angerDuration = 3f;
-
-    private float angerTimer;
+    private GameManager gameManager;
 
     private NavMeshAgent agent;
     private Rigidbody rb;
     private Transform player;
 
     private float wanderTimer;
-
-    private bool angryDestinationSet;
-
+    private float angerTimer;
     private float physicsTimer;
 
     private bool physicsActive;
+    private bool evictionComplete;
 
     private void Start()
     {
         agent = GetComponent<NavMeshAgent>();
         rb = GetComponent<Rigidbody>();
+
         gameManager =
-    FindFirstObjectByType<GameManager>();
+            FindFirstObjectByType<GameManager>();
 
         if (agent == null)
         {
@@ -73,6 +75,17 @@ public class NPCAI : MonoBehaviour
             return;
         }
 
+        if (occupantData == null)
+        {
+            Debug.LogError(
+                "No OccupantData assigned to " +
+                gameObject.name
+            );
+
+            enabled = false;
+            return;
+        }
+
         GameObject playerObject =
             GameObject.FindGameObjectWithTag("Player");
 
@@ -83,11 +96,12 @@ public class NPCAI : MonoBehaviour
         else
         {
             Debug.LogWarning(
-                "NPCAI could not find a GameObject tagged Player."
+                "NPCAI could not find a GameObject " +
+                "tagged Player."
             );
         }
 
-        // NavMeshAgent controls Dave normally.
+        // NavMeshAgent controls the NPC normally.
         rb.isKinematic = true;
 
         wanderTimer = 1f;
@@ -95,8 +109,7 @@ public class NPCAI : MonoBehaviour
 
     private void Update()
     {
-        // If physics currently controls Dave,
-        // wait until the recovery timer expires.
+        // Physics temporarily controls the NPC.
         if (physicsActive)
         {
             physicsTimer -= Time.deltaTime;
@@ -109,7 +122,7 @@ public class NPCAI : MonoBehaviour
             return;
         }
 
-        // Evicted is handled separately.
+        // Evicted has its own behaviour.
         if (currentState == State.Evicted)
         {
             HandleEvicted();
@@ -147,12 +160,55 @@ public class NPCAI : MonoBehaviour
             case State.Angry:
                 HandleAngry();
                 break;
+
+            case State.WalkingToDoor:
+                HandleWalkingToDoor();
+                break;
+
+            case State.AtDoor:
+                HandleAtDoor();
+                break;
         }
+    }
+
+    private void HandleWalkingToDoor()
+    {
+        if (doorPoint == null)
+            return;
+
+        agent.isStopped = false;
+
+        if (!agent.pathPending &&
+            agent.remainingDistance <= 0.7f)
+        {
+            agent.isStopped = true;
+
+            currentState = State.AtDoor;
+
+            Debug.Log(
+                gameObject.name +
+                " reached the door."
+            );
+
+            if (doorArrivalAction != null)
+            {
+                System.Action action = doorArrivalAction;
+
+                doorArrivalAction = null;
+
+                action.Invoke();
+            }
+        }
+    }
+
+    private void HandleAtDoor()
+    {
+        agent.isStopped = true;
     }
 
     private void HandleIdle(float distance)
     {
-        if (distance <= detectionRange)
+        if (distance <= occupantData.detectionRange)
         {
             currentState = State.Suspicious;
             return;
@@ -166,87 +222,9 @@ public class NPCAI : MonoBehaviour
         }
     }
 
-
-private void HandleAngry()
-    {
-        if (player == null)
-            return;
-
-        angerTimer -= Time.deltaTime;
-
-        // Look away from the player
-        Vector3 directionAway =
-            transform.position - player.position;
-
-        directionAway.y = 0f;
-
-        if (directionAway != Vector3.zero)
-        {
-            Quaternion targetRotation =
-                Quaternion.LookRotation(directionAway);
-
-            transform.rotation = Quaternion.Slerp(
-                transform.rotation,
-                targetRotation,
-                Time.deltaTime * 8f
-            );
-        }
-
-        // Move away from the player
-        if (agent.enabled)
-        {
-            agent.isStopped = false;
-
-            Vector3 targetPosition =
-                transform.position +
-                directionAway.normalized * 3f;
-
-            if (NavMesh.SamplePosition(
-                targetPosition,
-                out NavMeshHit hit,
-                3f,
-                NavMesh.AllAreas))
-            {
-                agent.SetDestination(hit.position);
-            }
-        }
-
-        if (angerTimer <= 0f)
-        {
-            currentState = State.Wandering;
-            wanderTimer = 0f;
-
-            if (agent.enabled)
-            {
-                agent.isStopped = false;
-            }
-        }
-    }
-
-public void BecomeAngry()
-    {
-        if (currentState == State.Evicted)
-            return;
-
-        currentState = State.Angry;
-        angerTimer = angerDuration;
-
-        angryDestinationSet = false;
-
-        if (agent.enabled)
-        {
-            agent.isStopped = false;
-        }
-
-        Debug.Log(
-            gameObject.name +
-            " is angry!"
-        );
-    }
-
     private void HandleWandering(float distance)
     {
-        if (distance <= detectionRange)
+        if (distance <= occupantData.detectionRange)
         {
             currentState = State.Suspicious;
             agent.isStopped = true;
@@ -275,12 +253,14 @@ public void BecomeAngry()
 
         LookAtPlayer();
 
-        if (distance > detectionRange + 2f)
+        if (distance >
+            occupantData.detectionRange + 2f)
         {
             currentState = State.Wandering;
             wanderTimer = 0f;
         }
-        else if (distance <= detectionRange / 2f)
+        else if (distance <=
+                 occupantData.detectionRange / 2f)
         {
             currentState = State.Investigating;
         }
@@ -300,11 +280,94 @@ public void BecomeAngry()
             player.position
         );
 
-        if (distance > detectionRange)
+        if (distance > occupantData.detectionRange)
         {
             currentState = State.Wandering;
             wanderTimer = 0f;
         }
+    }
+
+    private void HandleAngry()
+    {
+        if (player == null)
+            return;
+
+        angerTimer -= Time.deltaTime;
+
+        // Look away from the player.
+        Vector3 directionAway =
+            transform.position -
+            player.position;
+
+        directionAway.y = 0f;
+
+        if (directionAway != Vector3.zero)
+        {
+            Quaternion targetRotation =
+                Quaternion.LookRotation(
+                    directionAway
+                );
+
+            transform.rotation =
+                Quaternion.Slerp(
+                    transform.rotation,
+                    targetRotation,
+                    Time.deltaTime * 8f
+                );
+        }
+
+        // Move away from the player.
+        if (agent.enabled)
+        {
+            agent.isStopped = false;
+
+            Vector3 targetPosition =
+                transform.position +
+                directionAway.normalized * 3f;
+
+            if (NavMesh.SamplePosition(
+                targetPosition,
+                out NavMeshHit hit,
+                3f,
+                NavMesh.AllAreas))
+            {
+                agent.SetDestination(
+                    hit.position
+                );
+            }
+        }
+
+        if (angerTimer <= 0f)
+        {
+            currentState = State.Wandering;
+            wanderTimer = 0f;
+
+            if (agent.enabled)
+            {
+                agent.isStopped = false;
+            }
+        }
+    }
+
+    public void BecomeAngry()
+    {
+        if (currentState == State.Evicted)
+            return;
+
+        currentState = State.Angry;
+
+        angerTimer =
+            occupantData.angerDuration;
+
+        if (agent.enabled)
+        {
+            agent.isStopped = false;
+        }
+
+        Debug.Log(
+            gameObject.name +
+            " is angry!"
+        );
     }
 
     private void HandleEvicted()
@@ -322,7 +385,9 @@ public void BecomeAngry()
 
         if (!agent.hasPath)
         {
-            agent.SetDestination(exitPoint.position);
+            agent.SetDestination(
+                exitPoint.position
+            );
         }
 
         if (!agent.pathPending &&
@@ -343,20 +408,21 @@ public void BecomeAngry()
             }
         }
     }
+
     private void Wander()
     {
         agent.isStopped = false;
 
         Vector3 randomDirection =
             UnityEngine.Random.insideUnitSphere *
-            wanderRadius;
+            occupantData.wanderRadius;
 
         randomDirection += transform.position;
 
         if (NavMesh.SamplePosition(
             randomDirection,
             out NavMeshHit hit,
-            wanderRadius,
+            occupantData.wanderRadius,
             NavMesh.AllAreas))
         {
             agent.SetDestination(
@@ -364,7 +430,8 @@ public void BecomeAngry()
             );
         }
 
-        wanderTimer = wanderInterval;
+        wanderTimer =
+            occupantData.wanderInterval;
     }
 
     private void LookAtPlayer()
@@ -381,7 +448,9 @@ public void BecomeAngry()
         if (direction != Vector3.zero)
         {
             Quaternion rotation =
-                Quaternion.LookRotation(direction);
+                Quaternion.LookRotation(
+                    direction
+                );
 
             transform.rotation =
                 Quaternion.Slerp(
@@ -392,7 +461,8 @@ public void BecomeAngry()
         }
     }
 
-    private void OnCollisionEnter(Collision collision)
+    private void OnCollisionEnter(
+        Collision collision)
     {
         if (!collision.gameObject.CompareTag("Player"))
             return;
@@ -421,9 +491,13 @@ public void BecomeAngry()
             ForceMode.Impulse
         );
 
-        Debug.Log("Dave was pushed!");
+        Debug.Log(
+            gameObject.name +
+            " was pushed!"
+        );
 
-        NPC npc = GetComponent<NPC>();
+        NPC npc =
+            GetComponent<NPC>();
 
         if (npc != null)
         {
@@ -436,13 +510,9 @@ public void BecomeAngry()
         physicsActive = true;
         physicsTimer = physicsRecoveryTime;
 
-        // Stop the NavMeshAgent.
         agent.isStopped = true;
-
-        // Disable the agent while physics controls Dave.
         agent.enabled = false;
 
-        // Allow Rigidbody physics.
         rb.isKinematic = false;
     }
 
@@ -450,7 +520,6 @@ public void BecomeAngry()
     {
         physicsActive = false;
 
-        // Find the closest valid point on the NavMesh.
         if (NavMesh.SamplePosition(
             transform.position,
             out NavMeshHit hit,
@@ -460,10 +529,11 @@ public void BecomeAngry()
             transform.position = hit.position;
         }
 
-        // Turn the NavMeshAgent back on.
         agent.enabled = true;
 
-        agent.Warp(transform.position);
+        agent.Warp(
+            transform.position
+        );
 
         rb.linearVelocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
@@ -472,7 +542,10 @@ public void BecomeAngry()
 
         agent.isStopped = false;
 
-        Debug.Log("Dave returned to NavMesh control.");
+        Debug.Log(
+            gameObject.name +
+            " returned to NavMesh control."
+        );
     }
 
     public void OnKnockedOn()
@@ -503,7 +576,8 @@ public void BecomeAngry()
         if (exitPoint == null)
         {
             Debug.LogError(
-                "Dave cannot be evicted because " +
+                gameObject.name +
+                " cannot be evicted because " +
                 "Exit Point has not been assigned."
             );
 
@@ -512,7 +586,8 @@ public void BecomeAngry()
 
         currentState = State.Evicted;
 
-        // Make sure the NavMeshAgent is active.
+        evictionComplete = false;
+
         if (!agent.enabled)
         {
             agent.enabled = true;
@@ -529,7 +604,31 @@ public void BecomeAngry()
         );
 
         Debug.Log(
-            "Dave is walking to the exit."
+            gameObject.name +
+            " is walking to the exit."
         );
     }
+
+    public void GoToDoor(
+    Transform target,
+    System.Action onArrival)
+    {
+        if (currentState == State.Evicted)
+            return;
+
+        doorPoint = target;
+        doorArrivalAction = onArrival;
+
+        currentState = State.WalkingToDoor;
+
+        agent.isStopped = false;
+        agent.SetDestination(doorPoint.position);
+
+        Debug.Log(
+            gameObject.name +
+            " is walking to the door."
+        );
+    }
+
+    public void LeaveDoor() { if (currentState != State.AtDoor) return; doorPoint = null; doorArrivalAction = null; currentState = State.Wandering; wanderTimer = 0f; agent.isStopped = false; Debug.Log(gameObject.name + " is leaving the door."); }
 }
