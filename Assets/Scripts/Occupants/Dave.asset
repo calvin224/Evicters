@@ -17,7 +17,7 @@ MonoBehaviour:
   wanderRadius: 5
   wanderInterval: 4
   angerDuration: 3
-  openingDialogue:
+  knockDialogue:
   - Who is it?
   - What do you want?
   - I'm not leaving this house.
