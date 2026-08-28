@@ -13,6 +13,11 @@ public class Door : Interactable
     private Quaternion closedRotation;
     private Quaternion openRotation;
 
+    // Testing convenience: after the knock/dialogue flow has
+    // happened once, further interactions just toggle the door
+    // directly instead of re-triggering the occupant.
+    private bool hasKnockedOnce;
+
     private void Start()
     {
         closedRotation = transform.localRotation;
@@ -24,6 +29,20 @@ public class Door : Interactable
 
     public override void Interact()
     {
+        if (hasKnockedOnce)
+        {
+            if (isOpen)
+            {
+                CloseDoor();
+            }
+            else
+            {
+                OpenDoor();
+            }
+
+            return;
+        }
+
         Debug.Log("KNOCK - Door.Interact()");
 
         if (occupant == null)
@@ -43,6 +62,8 @@ public class Door : Interactable
 
             return;
         }
+
+        hasKnockedOnce = true;
 
         // Do NOT open the door.
         // Just knock and tell the occupant.
