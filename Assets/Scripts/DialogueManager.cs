@@ -1,6 +1,7 @@
 using UnityEngine;
 using TMPro;
 using UnityEngine.InputSystem;
+using System;
 
 public class DialogueManager : MonoBehaviour
 {
@@ -11,25 +12,39 @@ public class DialogueManager : MonoBehaviour
     private string[] lines;
     private int currentLine;
 
-    // Prevents the E press that opens dialogue
-    // from also advancing it.
     private bool justOpened;
+
+    private Action dialogueFinished;
 
     private void Start()
     {
         dialoguePanel.SetActive(false);
     }
 
-    public void StartDialogue(string speaker, string[] dialogueLines)
+    public void StartDialogue(
+        string speaker,
+        string[] dialogueLines,
+        Action onFinished = null)
     {
+        if (dialogueLines == null ||
+            dialogueLines.Length == 0)
+        {
+            Debug.LogWarning("Dialogue has no lines.");
+            return;
+        }
+
         lines = dialogueLines;
         currentLine = 0;
+
+        dialogueFinished = onFinished;
 
         speakerText.text = speaker;
         dialogueText.text = lines[currentLine];
 
         dialoguePanel.SetActive(true);
 
+        // Prevent the E used to start the dialogue
+        // from immediately advancing the first line.
         justOpened = true;
     }
 
@@ -54,7 +69,13 @@ public class DialogueManager : MonoBehaviour
     private void EndDialogue()
     {
         dialoguePanel.SetActive(false);
+
         justOpened = false;
+
+        Action callback = dialogueFinished;
+        dialogueFinished = null;
+
+        callback?.Invoke();
     }
 
     private void Update()
@@ -62,7 +83,6 @@ public class DialogueManager : MonoBehaviour
         if (!dialoguePanel.activeSelf)
             return;
 
-        // Ignore the same E press that opened the dialogue.
         if (justOpened)
         {
             justOpened = false;
