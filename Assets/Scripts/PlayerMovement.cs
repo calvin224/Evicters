@@ -52,14 +52,6 @@ public class PlayerMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
-        Vector3 direction =
-            transform.forward * moveInput.y +
-            transform.right * moveInput.x;
-
-        direction.Normalize();
-
-        rb.MovePosition(
-            rb.position + direction * moveSpeed * Time.fixedDeltaTime
-        );
+        Vector3 direction = transform.forward * moveInput.y + transform.right * moveInput.x; direction.Normalize(); Vector3 targetVelocity = direction * moveSpeed; rb.linearVelocity = new Vector3(targetVelocity.x, rb.linearVelocity.y, targetVelocity.z);
     }
 }

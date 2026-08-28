@@ -1,7 +1,7 @@
-using UnityEngine;
-using TMPro;
-using UnityEngine.InputSystem;
 using System;
+using TMPro;
+using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class DialogueManager : MonoBehaviour
 {

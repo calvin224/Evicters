@@ -63,6 +63,32 @@ public class NPC : Interactable
         );
     }
 
+    public void ReactToPush()
+    {
+        if (dialogueManager == null)
+            return;
+
+        if (npcAI != null &&
+            npcAI.currentState == NPCAI.State.Evicted)
+            return;
+
+        string[] lines =
+        {
+            "Hey!",
+            "Don't push me!"
+        };
+
+        dialogueManager.StartDialogue(
+            npcName,
+            lines
+        );
+
+        if (npcAI != null)
+        {
+            npcAI.BecomeAngry();
+        }
+    }
+
     private void Evict()
     {
         if (npcAI == null)
